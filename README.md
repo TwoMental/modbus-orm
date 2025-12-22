@@ -4,6 +4,36 @@ Object Relational Mapping (ORM) for Modbus
 ## What is ModbusORM
 ModbusORM is a golang package allows you to read/write Modbus data by struct with tag (`morm`).
 
+## Features
+- **Multiple Register Types Support**
+  - Coil (Read/Write)
+  - Discrete Input (Read only)
+  - Input Register (Read only)
+  - Holding Register (Read/Write)
+
+- **Data Types**
+  - U16 (Unsigned 16-bit)
+  - S16 (Signed 16-bit)
+  - U32 (Unsigned 32-bit)
+  - S32 (Signed 32-bit)
+  - Float (32-bit floating point)
+  - String
+  - OriginByte (Raw byte array)
+  - Arrays/Slices of above types
+
+- **Connection Types**
+  - Modbus TCP/IP
+  - Modbus RTU (Serial)
+
+- **Advanced Features**
+  - Connection pooling with configurable pool size and connection lifetime
+  - Connection reuse for same IP:Port (TCP) or same serial port (RTU)
+  - Support different slave IDs on the same connection (TCP/RTU)
+  - Block reading mode for efficient bulk data reading
+  - Coefficient and offset support for data transformation
+  - Byte order support (Big Endian / Little Endian)
+  - Context support for cancellation and timeout
+
 ## Usage
 - Define the points
     ```go
@@ -22,7 +52,7 @@ ModbusORM is a golang package allows you to read/write Modbus data by struct wit
 			//      then you will get 1 in result.
 			Coefficient: 0.1,
 			// Data type of this point
-			//      U16, S16, U32, S32
+			//      U16, S16, U32, S32, Float
 			DataType: modbusorm.PointDataTypeU16,
 			// RegisterType of this point
 			//		Coil, Discrete Input, Input Register, Holding Register
@@ -65,9 +95,17 @@ ModbusORM is a golang package allows you to read/write Modbus data by struct wit
 		// timeout setting.
 		modbusorm.WithTimeout(1*time.Second),
 		// max open connections in connection pool.
+		//  When MaxOpenConns == 1, only one connection will be established with the slave,
+		//  and connection pool mechanism is not used (a single connection is maintained directly).
 		modbusorm.WithMaxOpenConns(3),
 		// max connection lifetime in connection pool.
 		modbusorm.WithConnMaxLifetime(30*time.Minute),
+		// reuse connection for same ip:port (TCP) or same serial port (RTU).
+		//  When enabled, multiple Modbus instances with same IP:Port (TCP) or ComAddr (RTU)
+		//  will share the same connection pool, and can use different slave IDs.
+		modbusorm.WithReuseConn(false),
+		// slave ID setting.
+		modbusorm.WithSlaveID(1),
 	)
 	// connect
 	conn.Conn()
@@ -83,9 +121,12 @@ ModbusORM is a golang package allows you to read/write Modbus data by struct wit
     - start a demo server: `go run server.go`
     - start a demo client: `go run client.go`
 
-# TODOs
-- [ ] Support different slave id on the same serial port
+## TODOs
 - [ ] Example
 - [ ] Logger
 - [x] Modbus RTU 
-- [x] More data type
+- [x] More data types (U16, S16, U32, S32, Float)
+- [x] Coil and Discrete Input register types support
+- [x] Precision control for floating point calculations
+- [x] Block reading mode optimization
+- [x] Support different slave id on the same serial port (RTU) and same IP:Port (TCP)

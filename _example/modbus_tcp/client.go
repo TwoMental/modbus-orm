@@ -23,11 +23,14 @@ func main() {
 	log.Printf("Read: %s", data.String())
 
 	data.A = new(float64)
+	data.A2 = 222
 	data.B = 12.3
 	data.C = []float64{10.1, 10.2, 10.3}
 	data.E = "Yo"
 	data.F = []int{1, -20, 30, -40, 50, 60, 70}
-	conn.SetValues(ctx, data)
+	if e := conn.SetValues(ctx, data); e != nil {
+		log.Fatalf("Error: %s", e)
+	}
 	log.Printf("Write: %s", data.String())
 
 	conn.GetValues(ctx, data)
@@ -37,10 +40,18 @@ func main() {
 func point() modbusorm.Point {
 	return modbusorm.Point{
 		"a": modbusorm.PointDetails{
-			Addr:        100,
-			Quantity:    1,
-			Coefficient: 0.1,
-			DataType:    modbusorm.PointDataTypeU16,
+			Addr:         100,
+			Quantity:     1,
+			Coefficient:  0.1,
+			DataType:     modbusorm.PointDataTypeU16,
+			RegisterType: modbusorm.RegisterTypeHoldingRegister,
+		},
+		"a2": modbusorm.PointDetails{
+			Addr:         100,
+			Quantity:     1,
+			Coefficient:  0.1,
+			DataType:     modbusorm.PointDataTypeU16,
+			RegisterType: modbusorm.RegisterTypeHoldingRegister,
 		},
 		"b": modbusorm.PointDetails{
 			Addr:        101,
@@ -74,9 +85,10 @@ func point() modbusorm.Point {
 }
 
 type Data struct {
-	A *float64  `morm:"a"`
-	B float64   `morm:"b"`
-	C []float64 `morm:"c"`
+	A  *float64  `morm:"a"`
+	A2 float64   `morm:"a2"`
+	B  float64   `morm:"b"`
+	C  []float64 `morm:"c"`
 	// D modbusorm.OriginByte `morm:"d"`
 	E string   `morm:"e"`
 	F []int    `morm:"f"`

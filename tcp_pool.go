@@ -8,12 +8,13 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/goburrow/modbus"
+	"github.com/TwoMental/modbus"
 )
 
 type ModbusTCPPool struct {
 	mutex       sync.Mutex
 	connections chan Client
+	connection  Client // if config.MaxOpenConns==1 is true, this is the only connection
 	factory     func() (Client, error)
 	closed      bool
 	config      ModbusTCPPoolConfig
@@ -63,48 +64,48 @@ func (c *ModbusTCPClient) CreateTime() time.Time {
 	return c.createTime
 }
 
-func (c *ModbusTCPClient) ReadCoils(address, quantity uint16) (results []byte, err error) {
-	return c.Client.ReadCoils(address, quantity)
+func (c *ModbusTCPClient) ReadCoils(address, quantity uint16, SlaveID ...byte) (results []byte, err error) {
+	return c.Client.ReadCoils(address, quantity, SlaveID...)
 }
 
-func (c *ModbusTCPClient) ReadDiscreteInputs(address, quantity uint16) (results []byte, err error) {
-	return c.Client.ReadDiscreteInputs(address, quantity)
+func (c *ModbusTCPClient) ReadDiscreteInputs(address, quantity uint16, SlaveID ...byte) (results []byte, err error) {
+	return c.Client.ReadDiscreteInputs(address, quantity, SlaveID...)
 }
 
-func (c *ModbusTCPClient) WriteSingleCoil(address, value uint16) (results []byte, err error) {
-	return c.Client.WriteSingleCoil(address, value)
+func (c *ModbusTCPClient) WriteSingleCoil(address, value uint16, SlaveID ...byte) (results []byte, err error) {
+	return c.Client.WriteSingleCoil(address, value, SlaveID...)
 }
 
-func (c *ModbusTCPClient) WriteMultipleCoils(address, quantity uint16, value []byte) (results []byte, err error) {
-	return c.Client.WriteMultipleCoils(address, quantity, value)
+func (c *ModbusTCPClient) WriteMultipleCoils(address, quantity uint16, value []byte, SlaveID ...byte) (results []byte, err error) {
+	return c.Client.WriteMultipleCoils(address, quantity, value, SlaveID...)
 }
 
-func (c *ModbusTCPClient) ReadInputRegisters(address, quantity uint16) (results []byte, err error) {
-	return c.Client.ReadInputRegisters(address, quantity)
+func (c *ModbusTCPClient) ReadInputRegisters(address, quantity uint16, SlaveID ...byte) (results []byte, err error) {
+	return c.Client.ReadInputRegisters(address, quantity, SlaveID...)
 }
 
-func (c *ModbusTCPClient) ReadHoldingRegisters(address, quantity uint16) (results []byte, err error) {
-	return c.Client.ReadHoldingRegisters(address, quantity)
+func (c *ModbusTCPClient) ReadHoldingRegisters(address, quantity uint16, SlaveID ...byte) (results []byte, err error) {
+	return c.Client.ReadHoldingRegisters(address, quantity, SlaveID...)
 }
 
-func (c *ModbusTCPClient) WriteSingleRegister(address, value uint16) (results []byte, err error) {
-	return c.Client.WriteSingleRegister(address, value)
+func (c *ModbusTCPClient) WriteSingleRegister(address, value uint16, SlaveID ...byte) (results []byte, err error) {
+	return c.Client.WriteSingleRegister(address, value, SlaveID...)
 }
 
-func (c *ModbusTCPClient) WriteMultipleRegisters(address, quantity uint16, value []byte) (results []byte, err error) {
-	return c.Client.WriteMultipleRegisters(address, quantity, value)
+func (c *ModbusTCPClient) WriteMultipleRegisters(address, quantity uint16, value []byte, SlaveID ...byte) (results []byte, err error) {
+	return c.Client.WriteMultipleRegisters(address, quantity, value, SlaveID...)
 }
 
-func (c *ModbusTCPClient) ReadWriteMultipleRegisters(readAddress, readQuantity, writeAddress, writeQuantity uint16, value []byte) (results []byte, err error) {
-	return c.Client.ReadWriteMultipleRegisters(readAddress, readQuantity, writeAddress, writeQuantity, value)
+func (c *ModbusTCPClient) ReadWriteMultipleRegisters(readAddress, readQuantity, writeAddress, writeQuantity uint16, value []byte, SlaveID ...byte) (results []byte, err error) {
+	return c.Client.ReadWriteMultipleRegisters(readAddress, readQuantity, writeAddress, writeQuantity, value, SlaveID...)
 }
 
-func (c *ModbusTCPClient) MaskWriteRegister(address, andMask, orMask uint16) (results []byte, err error) {
-	return c.Client.MaskWriteRegister(address, andMask, orMask)
+func (c *ModbusTCPClient) MaskWriteRegister(address, andMask, orMask uint16, SlaveID ...byte) (results []byte, err error) {
+	return c.Client.MaskWriteRegister(address, andMask, orMask, SlaveID...)
 }
 
-func (c *ModbusTCPClient) ReadFIFOQueue(address uint16) (results []byte, err error) {
-	return c.Client.ReadFIFOQueue(address)
+func (c *ModbusTCPClient) ReadFIFOQueue(address uint16, SlaveID ...byte) (results []byte, err error) {
+	return c.Client.ReadFIFOQueue(address, SlaveID...)
 }
 
 func NewModbusTCPPool(config ModbusTCPPoolConfig, factory func() (Client, error)) (ConnPool, error) {
@@ -116,17 +117,27 @@ func NewModbusTCPPool(config ModbusTCPPoolConfig, factory func() (Client, error)
 	}
 
 	pool := &ModbusTCPPool{
-		factory:     factory,
-		connections: make(chan Client, config.MaxOpenConns),
-		config:      config,
+		factory: factory,
+		config:  config,
 	}
 
-	for i := 0; i < config.MaxOpenConns; i++ {
+	if config.MaxOpenConns == 1 {
+		// if only one connection is allowed, create and maintain a single connection directly
 		conn, err := factory()
 		if err != nil {
 			return nil, err
 		}
-		pool.connections <- conn
+		pool.connection = conn
+	} else {
+		// if multiple connections are allowed, create MaxOpenConns connections
+		pool.connections = make(chan Client, config.MaxOpenConns)
+		for i := 0; i < config.MaxOpenConns; i++ {
+			conn, err := factory()
+			if err != nil {
+				return nil, err
+			}
+			pool.connections <- conn
+		}
 	}
 
 	return pool, nil
@@ -136,6 +147,11 @@ func NewModbusTCPPool(config ModbusTCPPoolConfig, factory func() (Client, error)
 func (p *ModbusTCPPool) Get() (Client, error) {
 	if p.closed {
 		return nil, ErrPoolClosed
+	}
+
+	// if only one connection is allowed, return it directly
+	if p.config.MaxOpenConns == 1 {
+		return p.connection, nil
 	}
 
 	select {
@@ -151,6 +167,12 @@ func (p *ModbusTCPPool) Get() (Client, error) {
 func (p *ModbusTCPPool) Put(conn Client) error {
 	if p.closed {
 		return conn.Close()
+	}
+
+	// if only one connection is allowed, return directly
+	if p.config.MaxOpenConns == 1 {
+		// TODO: keep-alive check for the single connection
+		return nil
 	}
 
 	if time.Since(conn.CreateTime()) > p.config.ConnMaxLifetime {
@@ -176,6 +198,10 @@ func (p *ModbusTCPPool) Put(conn Client) error {
 
 // Close close the pool
 func (p *ModbusTCPPool) Close() error {
+	if p.config.MaxOpenConns == 1 {
+		return p.connection.Close()
+	}
+
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
 

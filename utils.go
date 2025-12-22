@@ -2,12 +2,12 @@ package modbusorm
 
 import (
 	"encoding/binary"
-	"fmt"
+	"math"
 	"reflect"
 )
 
 // parseDataToFloat64 transform data to float64
-func parseDataToFloat64(data []byte, dataType PointDataType, order ...OrderType) (float64, error) {
+func parseDataToFloat64(data []byte, dataType PointDataType, order ...OrderType) float64 {
 	var dataFloat64Before float64
 	binaryOrder := OrderTypeDefault
 	if len(order) > 0 {
@@ -22,10 +22,12 @@ func parseDataToFloat64(data []byte, dataType PointDataType, order ...OrderType)
 		dataFloat64Before = float64(binaryUint32(data, binaryOrder))
 	case PointDataTypeS32:
 		dataFloat64Before = float64(int32(binaryUint32(data, binaryOrder)))
+	case PointDataTypeFloat:
+		dataFloat64Before = float64(math.Float32frombits(binary.BigEndian.Uint32(data)))
 	default:
-		return 0, fmt.Errorf("unsupported data type: %d", dataType)
+		// unsupported data type, return 0
 	}
-	return dataFloat64Before, nil
+	return dataFloat64Before
 }
 
 // binaryUint32 reverse the byte order and convert to uint32
@@ -48,16 +50,17 @@ func getPointTag(field reflect.StructField) (bool, string) {
 
 // byte2String convert byte to string
 func byte2String(data []byte, order OrderType) string {
+	// pad to even length
 	if len(data)%2 != 0 {
 		data = append(data, 0x00)
 	}
 
-	if order == OrderTypeLittleEndian {
-		for i := 0; i < len(data); i += 2 {
-			data[i], data[i+1] = data[i+1], data[i]
-		}
+	// swap adjacent bytes
+	for i := 0; i < len(data); i += 2 {
+		data[i], data[i+1] = data[i+1], data[i]
 	}
 
+	// truncate at first null byte
 	for i, b := range data {
 		if b == 0x00 {
 			return string(data[:i])
@@ -70,14 +73,14 @@ func byte2String(data []byte, order OrderType) string {
 func string2Byte(data string, order OrderType) []byte {
 	result := []byte(data)
 
+	// pad to even length
 	if len(result)%2 != 0 {
 		result = append(result, 0x00)
 	}
 
-	if order == OrderTypeLittleEndian {
-		for i := 0; i < len(data); i += 2 {
-			result[i], result[i+1] = result[i+1], result[i]
-		}
+	// swap adjacent bytes
+	for i := 0; i < len(data); i += 2 {
+		result[i], result[i+1] = result[i+1], result[i]
 	}
 
 	return result

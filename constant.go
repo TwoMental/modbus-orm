@@ -16,6 +16,7 @@ const (
 	PointDataTypeS16
 	PointDataTypeU32
 	PointDataTypeS32
+	PointDataTypeFloat
 )
 
 // RegisterType register type

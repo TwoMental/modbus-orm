@@ -8,7 +8,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/goburrow/modbus"
+	"github.com/TwoMental/modbus"
 
 	"github.com/tbrandon/mbserver"
 )

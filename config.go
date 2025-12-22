@@ -8,6 +8,7 @@ type modbusTCP struct {
 	Port            uint
 	MaxOpenConns    int
 	ConnMaxLifetime time.Duration
+	ReuseConn       bool // reuse connection for same ip:port
 }
 
 // modbusRTU Connection config of RTU
@@ -46,6 +47,13 @@ func WithMaxOpenConns(maxOpenConns int) ModbusOption {
 func WithConnMaxLifetime(connMaxLifetime time.Duration) ModbusOption {
 	return func(d *Modbus) {
 		d.ConnMaxLifetime = connMaxLifetime
+	}
+}
+
+// WithReuseConn Set whether to reuse connection for same ip:port
+func WithReuseConn(reuseConn bool) ModbusOption {
+	return func(d *Modbus) {
+		d.ReuseConn = reuseConn
 	}
 }
 

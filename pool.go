@@ -3,7 +3,7 @@ package modbusorm
 import (
 	"time"
 
-	"github.com/goburrow/modbus"
+	"github.com/TwoMental/modbus"
 )
 
 type Client interface {

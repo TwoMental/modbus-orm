@@ -3,7 +3,7 @@ package modbusorm
 import (
 	"time"
 
-	"github.com/goburrow/modbus"
+	"github.com/TwoMental/modbus"
 )
 
 type ModbusRTUPool struct {
@@ -54,46 +54,46 @@ func (c *ModbusRTUClient) CreateTime() time.Time {
 	return c.createTime
 }
 
-func (c *ModbusRTUClient) ReadCoils(address, quantity uint16) (results []byte, err error) {
-	return c.Client.ReadCoils(address, quantity)
+func (c *ModbusRTUClient) ReadCoils(address, quantity uint16, SlaveID ...byte) (results []byte, err error) {
+	return c.Client.ReadCoils(address, quantity, SlaveID...)
 }
 
-func (c *ModbusRTUClient) ReadDiscreteInputs(address, quantity uint16) (results []byte, err error) {
-	return c.Client.ReadDiscreteInputs(address, quantity)
+func (c *ModbusRTUClient) ReadDiscreteInputs(address, quantity uint16, SlaveID ...byte) (results []byte, err error) {
+	return c.Client.ReadDiscreteInputs(address, quantity, SlaveID...)
 }
 
-func (c *ModbusRTUClient) WriteSingleCoil(address, value uint16) (results []byte, err error) {
-	return c.Client.WriteSingleCoil(address, value)
+func (c *ModbusRTUClient) WriteSingleCoil(address, value uint16, SlaveID ...byte) (results []byte, err error) {
+	return c.Client.WriteSingleCoil(address, value, SlaveID...)
 }
 
-func (c *ModbusRTUClient) WriteMultipleCoils(address, quantity uint16, value []byte) (results []byte, err error) {
-	return c.Client.WriteMultipleCoils(address, quantity, value)
+func (c *ModbusRTUClient) WriteMultipleCoils(address, quantity uint16, value []byte, SlaveID ...byte) (results []byte, err error) {
+	return c.Client.WriteMultipleCoils(address, quantity, value, SlaveID...)
 }
 
-func (c *ModbusRTUClient) ReadInputRegisters(address, quantity uint16) (results []byte, err error) {
-	return c.Client.ReadInputRegisters(address, quantity)
+func (c *ModbusRTUClient) ReadInputRegisters(address, quantity uint16, SlaveID ...byte) (results []byte, err error) {
+	return c.Client.ReadInputRegisters(address, quantity, SlaveID...)
 }
 
-func (c *ModbusRTUClient) ReadHoldingRegisters(address, quantity uint16) (results []byte, err error) {
-	return c.Client.ReadHoldingRegisters(address, quantity)
+func (c *ModbusRTUClient) ReadHoldingRegisters(address, quantity uint16, SlaveID ...byte) (results []byte, err error) {
+	return c.Client.ReadHoldingRegisters(address, quantity, SlaveID...)
 }
 
-func (c *ModbusRTUClient) WriteSingleRegister(address, value uint16) (results []byte, err error) {
-	return c.Client.WriteSingleRegister(address, value)
+func (c *ModbusRTUClient) WriteSingleRegister(address, value uint16, SlaveID ...byte) (results []byte, err error) {
+	return c.Client.WriteSingleRegister(address, value, SlaveID...)
 }
 
-func (c *ModbusRTUClient) WriteMultipleRegisters(address, quantity uint16, value []byte) (results []byte, err error) {
-	return c.Client.WriteMultipleRegisters(address, quantity, value)
+func (c *ModbusRTUClient) WriteMultipleRegisters(address, quantity uint16, value []byte, SlaveID ...byte) (results []byte, err error) {
+	return c.Client.WriteMultipleRegisters(address, quantity, value, SlaveID...)
 }
 
-func (c *ModbusRTUClient) ReadWriteMultipleRegisters(readAddress, readQuantity, writeAddress, writeQuantity uint16, value []byte) (results []byte, err error) {
-	return c.Client.ReadWriteMultipleRegisters(readAddress, readQuantity, writeAddress, writeQuantity, value)
+func (c *ModbusRTUClient) ReadWriteMultipleRegisters(readAddress, readQuantity, writeAddress, writeQuantity uint16, value []byte, SlaveID ...byte) (results []byte, err error) {
+	return c.Client.ReadWriteMultipleRegisters(readAddress, readQuantity, writeAddress, writeQuantity, value, SlaveID...)
 }
 
-func (c *ModbusRTUClient) MaskWriteRegister(address, andMask, orMask uint16) (results []byte, err error) {
-	return c.Client.MaskWriteRegister(address, andMask, orMask)
+func (c *ModbusRTUClient) MaskWriteRegister(address, andMask, orMask uint16, SlaveID ...byte) (results []byte, err error) {
+	return c.Client.MaskWriteRegister(address, andMask, orMask, SlaveID...)
 }
 
-func (c *ModbusRTUClient) ReadFIFOQueue(address uint16) (results []byte, err error) {
-	return c.Client.ReadFIFOQueue(address)
+func (c *ModbusRTUClient) ReadFIFOQueue(address uint16, SlaveID ...byte) (results []byte, err error) {
+	return c.Client.ReadFIFOQueue(address, SlaveID...)
 }

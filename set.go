@@ -53,6 +53,14 @@ func (m *Modbus) SetValue(ctx context.Context, point string, data any) error {
 }
 
 func (m *Modbus) valueToBytes(data any, fieldDetail PointDetails, quantity uint16) ([]byte, error) {
+	if fieldDetail.RegisterType == RegisterTypeCoil {
+		return m.valueToBytesCoil(data)
+	} else {
+		return m.valueToBytesHolding(data, fieldDetail, quantity)
+	}
+}
+
+func (m *Modbus) valueToBytesHolding(data any, fieldDetail PointDetails, quantity uint16) ([]byte, error) {
 	// check if data is OriginByte
 	if reflect.TypeOf(data).Name() == OriginByteName {
 		dataByte := reflect.ValueOf(data).Bytes()
@@ -82,7 +90,7 @@ func (m *Modbus) valueToBytes(data any, fieldDetail PointDetails, quantity uint1
 	case reflect.Float32, reflect.Float64:
 		valueFloat := (v.Float() / fieldDetail.getCoefficient()) - fieldDetail.Offset
 		if fieldDetail.DataType == PointDataTypeU32 || fieldDetail.DataType == PointDataTypeS32 {
-			err = binary.Write(&buffer, binary.BigEndian, int32(math.Round(valueFloat))) // math.Round避免精度损失
+			err = binary.Write(&buffer, binary.BigEndian, int32(math.Round(valueFloat))) // math.Round to avoid precision loss
 		} else {
 			err = binary.Write(&buffer, binary.BigEndian, int16(math.Round(valueFloat)))
 		}
@@ -112,6 +120,52 @@ func (m *Modbus) valueToBytes(data any, fieldDetail PointDetails, quantity uint1
 	}
 
 	return adjustByteSliceLength(buffer.Bytes(), quantity, true), nil
+}
+
+func (m *Modbus) valueToBytesCoil(data any) ([]byte, error) {
+	var value int8
+
+	// check if data is a pointer, if it is, dereference it
+	v := reflect.ValueOf(data)
+	if v.Kind() == reflect.Ptr {
+		v = v.Elem()
+	}
+
+	// confirm 0/1
+	switch v.Kind() {
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		if v.Int() == 0 {
+			value = 0
+		} else {
+			value = 1
+		}
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		if v.Uint() == 0 {
+			value = 0
+		} else {
+			value = 1
+		}
+	case reflect.Float32, reflect.Float64:
+		if v.Float() == 0 {
+			value = 0
+		} else {
+			value = 1
+		}
+	case reflect.Bool:
+		if v.Bool() {
+			value = 1
+		} else {
+			value = 0
+		}
+	default:
+		return nil, fmt.Errorf("unsupported type: %s for coil", v.Type())
+	}
+
+	res := make([]byte, 2)
+	if value == 1 {
+		res[0] = 0xFF
+	}
+	return res, nil
 }
 
 // adjustByteSliceLength adjusts the length of the byte slice to match quantity
@@ -159,11 +213,9 @@ func (m *Modbus) SetValues(ctx context.Context, v any) error {
 		if len(addrValue[k]) == 0 {
 			continue
 		}
-		// covert to block
-		var blockData blocks
-		if m.withBlock {
-			blockData = m.addrValueToBlocks(addrValue[k])
-		}
+		// convert to block
+		blockData := m.addrValueToBlocks(addrValue[k], k)
+
 		// write values
 		if e := m.writeValues(ctx, blockData, k); e != nil {
 			return errors.Wrap(e, "writeValues failed")
@@ -251,6 +303,17 @@ func (m *Modbus) gatherAddrValue(ctx context.Context, v any, addrValues addrValu
 				valueFloat = float64(value.Uint())
 			} else if value.CanFloat() {
 				valueFloat = value.Float()
+			} else if reflect.TypeOf(value.Interface()).Name() == OriginByteName {
+				values := value.Bytes()
+				if len(values) != int(fieldDetail.getQuantity())*2 {
+					return fmt.Errorf("value length not match, want %d, got %d", fieldDetail.getQuantity()*2, len(values))
+				}
+				addrValues[fieldDetail.RegisterType] = append(addrValues[fieldDetail.RegisterType], &block{
+					start:  fieldDetail.Addr,
+					end:    fieldDetail.Addr + fieldDetail.getQuantity() - 1,
+					values: values,
+				})
+				continue
 			} else {
 				continue
 			}
@@ -316,13 +379,58 @@ func (m *Modbus) gatherAddrValue(ctx context.Context, v any, addrValues addrValu
 						values: buf.Bytes(),
 					})
 				}
+			default:
+				if reflect.TypeOf(value.Interface()).Name() == OriginByteName {
+					values := value.Bytes()
+					if len(values) != int(fieldDetail.getQuantity())*2 {
+						return fmt.Errorf("value length not match, want %d, got %d", fieldDetail.getQuantity()*2, len(values))
+					}
+					addrValues[fieldDetail.RegisterType] = append(addrValues[fieldDetail.RegisterType], &block{
+						start:  fieldDetail.Addr,
+						end:    fieldDetail.Addr + fieldDetail.getQuantity() - 1,
+						values: values,
+					})
+				}
 			}
 		}
 	}
 	return nil
 }
 
-func (m *Modbus) addrValueToBlocks(rawData []*block) blocks {
+func (m *Modbus) addrValueToBlocks(rawData []*block, registerType RegisterType) blocks {
+	if registerType == RegisterTypeCoil {
+		return m.addrValueToBlocksCoil(rawData)
+	} else {
+		if m.withBlock {
+			return m.addrValueToBlocksWith(rawData)
+		} else {
+			return m.addrValueToBlocksWithout(rawData)
+		}
+	}
+}
+
+func (m *Modbus) addrValueToBlocksCoil(rawData []*block) blocks {
+	bs := make(blocks, len(rawData))
+	for _, v := range rawData {
+		if len(v.values) >= 2 && v.values[1] == 0x00 {
+			v.values = []byte{0x00, 0x00}
+		} else {
+			v.values = []byte{0xFF, 0x00}
+		}
+		bs[v.start] = v
+	}
+	return bs
+}
+
+func (m *Modbus) addrValueToBlocksWithout(rawData []*block) blocks {
+	bs := make(blocks, len(rawData))
+	for _, v := range rawData {
+		bs[v.start] = v
+	}
+	return bs
+}
+
+func (m *Modbus) addrValueToBlocksWith(rawData []*block) blocks {
 	// Convert the map to a slice of addresses
 	addrs := make([]*block, 0, len(rawData))
 	for _, v := range rawData {
@@ -381,8 +489,8 @@ func (m *Modbus) writeData(conn Client, addr uint16, quantity uint16, registerTy
 	if quantity <= m.maxQuantity {
 		return m.writeDataByType(conn, addr, quantity, registerType, data)
 	}
+	curAddr := addr
 	for quantity > 0 {
-		curAddr := addr
 		// calculate the quantity of this request
 		currentQuantity := min(quantity, m.maxQuantity)
 		// send request
@@ -398,20 +506,20 @@ func (m *Modbus) writeData(conn Client, addr uint16, quantity uint16, registerTy
 }
 
 // writeDataByType writes data according to the register type (not allowed to exceed maxQuantity)
-func (m *Modbus) writeDataByType(conn Client, addr uint16, quanity uint16, registerType RegisterType, data []byte) error {
+func (m *Modbus) writeDataByType(conn Client, addr uint16, quantity uint16, registerType RegisterType, data []byte) error {
 	var err error
 	switch registerType {
 	case RegisterTypeCoil:
-		if quanity == 1 {
-			_, err = conn.WriteSingleCoil(addr, binary.BigEndian.Uint16(data))
+		if quantity == 1 {
+			_, err = conn.WriteSingleCoil(addr, binary.BigEndian.Uint16(data), m.slaveID)
 		} else {
-			_, err = conn.WriteMultipleCoils(addr, quanity, data)
+			_, err = conn.WriteMultipleCoils(addr, quantity, data, m.slaveID)
 		}
 	case RegisterTypeHoldingRegister, RegisterTypeDefault:
-		if quanity == 1 {
-			_, err = conn.WriteSingleRegister(addr, binary.BigEndian.Uint16(data))
+		if quantity == 1 {
+			_, err = conn.WriteSingleRegister(addr, binary.BigEndian.Uint16(data), m.slaveID)
 		} else {
-			_, err = conn.WriteMultipleRegisters(addr, quanity, data)
+			_, err = conn.WriteMultipleRegisters(addr, quantity, data, m.slaveID)
 		}
 	default:
 		err = fmt.Errorf("unsupported register type for write: %d", registerType)
